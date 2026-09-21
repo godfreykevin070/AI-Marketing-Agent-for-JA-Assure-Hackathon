@@ -14,24 +14,33 @@ export function StatCard({
   label,
   value,
   hint,
+  icon,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
+  icon?: ReactNode;
 }) {
   return (
-    <div className="card">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <div className="card relative overflow-hidden">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-white">{value}</p>
+        </div>
+        {icon && (
+          <span className="rounded-lg bg-accent/10 p-2 text-accent-soft">{icon}</span>
+        )}
+      </div>
+      {hint && <p className="mt-2 text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }
 
 const TONES: Record<string, string> = {
-  neutral: "bg-ink-700 text-slate-200",
+  neutral: "bg-ink-700/60 text-slate-300 border border-ink-600",
   accent: "bg-accent/15 text-accent-soft border border-accent/30",
   success: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
   warning: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
@@ -89,7 +98,7 @@ export function complianceTone(status: string): string {
 export function Spinner({ label = "Working…" }: { label?: string }) {
   return (
     <div className="flex items-center gap-3 text-sm text-slate-400">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-600 border-t-accent" />
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-700 border-t-accent" />
       {label}
     </div>
   );
@@ -98,22 +107,29 @@ export function Spinner({ label = "Working…" }: { label?: string }) {
 export function EmptyState({
   title,
   hint,
+  action,
 }: {
   title: string;
   hint?: string;
+  action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-ink-600 p-10 text-center">
+    <div className="rounded-2xl border border-dashed border-ink-700 bg-ink-900/30 p-10 text-center">
       <p className="text-sm font-medium text-slate-300">{title}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">{hint}</p>}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );
 }
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-      {message}
+    <div className="flex items-start gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+      <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v5M12 16h.01" strokeLinecap="round" />
+      </svg>
+      <span>{message}</span>
     </div>
   );
 }

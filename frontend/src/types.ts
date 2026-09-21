@@ -188,3 +188,22 @@ export const LEAD_CATEGORIES = [
   "courier",
   "logistics",
 ] as const;
+
+export type UserRole = "admin" | "editor" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
+}
