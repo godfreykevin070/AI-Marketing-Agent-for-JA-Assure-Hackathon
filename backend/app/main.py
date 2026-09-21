@@ -20,7 +20,10 @@ from app.routers import (
     publishing,
     research,
     review,
+    auth,
+    users
 )
+from app.seed import ensure_default_admin
 from app.workers.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(
@@ -35,6 +38,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    ensure_default_admin()
     Path(settings.media_dir).mkdir(parents=True, exist_ok=True)
     scheduler = start_scheduler()
     logger.info("%s v%s started (%s)", settings.app_name, __version__, settings.environment)
@@ -76,6 +80,8 @@ app.include_router(research.router, prefix=settings.api_prefix)
 app.include_router(leads.router, prefix=settings.api_prefix)
 app.include_router(analytics.router, prefix=settings.api_prefix)
 app.include_router(publishing.router, prefix=settings.api_prefix)
+app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(users.router, prefix=settings.api_prefix)
 
 
 @app.get("/")

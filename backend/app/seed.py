@@ -39,6 +39,26 @@ SEED_COMPETITORS = [
     ("doctorshield", "Regional Medical Indemnity Provider C", "https://example.com/indemnity"),
 ]
 
+def ensure_default_admin() -> None:
+    """Create the default admin if no users exist at all."""
+    from app.config import get_settings
+    from app.models import User
+    from app.security import hash_password
+
+    settings = get_settings()
+    with SessionLocal() as db:
+        if db.query(User).count() > 0:
+            return
+        admin = User(
+            email=settings.default_admin_email.lower(),
+            full_name=settings.default_admin_name,
+            hashed_password=hash_password(settings.default_admin_password),
+            role="admin",
+            is_active=True,
+        )
+        db.add(admin)
+        db.commit()
+        logger.info("seeded default admin: %s", admin.email)
 
 def seed() -> None:
     init_db()

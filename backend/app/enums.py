@@ -104,3 +104,8 @@ LANGUAGE_NAMES: dict[str, str] = {
     "th": "Thai",
     "zh": "Chinese (Simplified)",
 }
+
+class UserRole(StrEnum):
+    admin = "admin"
+    editor = "editor"
+    viewer = "viewer"

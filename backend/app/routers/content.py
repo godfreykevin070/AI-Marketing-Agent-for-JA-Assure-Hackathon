@@ -8,8 +8,9 @@ from app.agents.graph import run_content_pipeline
 from app.db import get_db
 from app.models import ContentAsset
 from app.schemas import AssetOut, GenerateRequest, GenerateResponse
+from app.deps import get_current_user
 
-router = APIRouter(prefix="/content", tags=["content"])
+router = APIRouter(prefix="/content", tags=["content"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/generate", response_model=GenerateResponse)

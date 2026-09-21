@@ -10,7 +10,9 @@ from app.enums import AssetStatus
 from app.models import ContentAsset, Feedback, Lesson
 from app.schemas import AssetOut, FeedbackOut, LessonOut, ReviewDecisionRequest
 
-router = APIRouter(prefix="/review", tags=["review"])
+from app.deps import require_editor
+
+router = APIRouter(prefix="/review", tags=["review"], dependencies=[Depends(require_editor)])
 
 
 @router.get("/queue", response_model=list[AssetOut])

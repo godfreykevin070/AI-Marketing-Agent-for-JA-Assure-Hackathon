@@ -13,7 +13,9 @@ from app.db import get_db
 from app.models import CompetitorSnapshot, ResearchDigest
 from app.schemas import DigestOut, ResearchRequest
 
-router = APIRouter(prefix="/research", tags=["research"])
+from app.deps import get_current_user
+
+router = APIRouter(prefix="/research", tags=["research"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/competitors", response_model=DigestOut)

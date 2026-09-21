@@ -260,3 +260,14 @@ class AgentRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+class User(Base, TimestampMixin):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(240), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(160), default="")
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(24), default="viewer", index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

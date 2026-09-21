@@ -9,7 +9,9 @@ from app.models import PostResult
 from app.schemas import PostResultOut
 from app.services import analytics as analytics_service
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+from app.deps import get_current_user
+
+router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/overview")

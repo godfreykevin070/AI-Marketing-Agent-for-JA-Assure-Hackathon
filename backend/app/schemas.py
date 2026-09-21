@@ -14,6 +14,7 @@ from app.enums import (
     LeadCategory,
     Platform,
     ReasonTag,
+    UserRole
 )
 
 
@@ -278,3 +279,45 @@ class GenerateResponse(BaseModel):
     assets: list[AssetOut]
     research: dict[str, Any] | None = None
     errors: list[str] = Field(default_factory=list)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
+
+
+class CreateUserRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=6)
+    full_name: str = ""
+    role: UserRole = UserRole.viewer
+
+
+class UpdateUserRequest(BaseModel):
+    full_name: str | None = None
+    role: UserRole | None = None
+    is_active: bool | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)

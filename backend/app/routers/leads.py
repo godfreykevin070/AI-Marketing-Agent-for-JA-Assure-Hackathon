@@ -11,7 +11,9 @@ from app.enums import LeadStatus
 from app.models import Lead, OutreachDraft
 from app.schemas import LeadDiscoveryRequest, LeadOut, OutreachOut, OutreachRequest
 
-router = APIRouter(prefix="/leads", tags=["leads"])
+from app.deps import require_editor
+
+router = APIRouter(prefix="/leads", tags=["leads"], dependencies=[Depends(require_editor)])
 
 
 @router.post("/discover", response_model=list[LeadOut])

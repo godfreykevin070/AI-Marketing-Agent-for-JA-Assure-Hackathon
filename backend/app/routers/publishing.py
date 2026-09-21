@@ -11,7 +11,9 @@ from app.models import ContentAsset, PostResult
 from app.schemas import AssetOut, PostResultOut
 from app.workers.publish_worker import pull_analytics, publish_approved
 
-router = APIRouter(prefix="/publishing", tags=["publishing"])
+from app.deps import require_editor
+
+router = APIRouter(prefix="/publishing", tags=["publishing"], dependencies=[Depends(require_editor)])
 
 
 @router.get("/queue", response_model=list[AssetOut])

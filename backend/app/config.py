@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     analytics_poll_seconds: int = 600
     max_compliance_retries: int = 2
 
+    # --- Auth ---
+    jwt_secret_key: str = "change-me-in-production-please-use-a-long-random-string"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480          # 8 hours
+    default_admin_email: str = "admin@jaassure.com"
+    default_admin_password: str = "admin@123"
+    default_admin_name: str = "JA Assure Admin"
+
     # ------------------------------------------------------------------
     @field_validator("database_url")
     @classmethod
