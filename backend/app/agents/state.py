@@ -13,7 +13,7 @@ class ContentState(TypedDict, total=False):
     platforms: list[str]
     languages: list[str]
     variants: int
-    include_video: bool
+    media_mode: str          # ← was include_video: bool
     auto_compliance: bool
 
     research: dict[str, Any]

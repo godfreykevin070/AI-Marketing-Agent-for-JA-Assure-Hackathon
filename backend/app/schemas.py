@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -120,7 +121,7 @@ class GenerateRequest(BaseModel):
     )
     languages: list[Language] = Field(default_factory=lambda: [Language.en])
     variants: int = Field(default=2, ge=1, le=3)
-    include_video: bool = True
+    media_mode: Literal["none", "image", "video"] = "image"   # ← new
     auto_compliance: bool = True
 
 

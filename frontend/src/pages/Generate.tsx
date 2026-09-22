@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import type { Asset } from "../types";
+import type { Asset, MediaMode } from "../types";
 import { BRANDS, LANGUAGES, PLATFORMS, type Brand, type Language, type Platform } from "../types";
 import AssetCard from "../components/AssetCard";
 import { Card, ErrorBanner, Spinner } from "../components/ui";
@@ -21,6 +21,12 @@ const SUGGESTED_TOPICS: Record<string, string[]> = {
   ja_assure: ["Why specialist cover beats a generic commercial policy"],
 };
 
+const MEDIA_OPTIONS: { value: MediaMode; label: string; hint: string }[] = [
+  { value: "none", label: "No media", hint: "Text-only post" },
+  { value: "image", label: "Image", hint: "Stock photo (Pexels)" },
+  { value: "video", label: "Video / Reel", hint: "Rendered 9:16 MP4" },
+];
+
 export default function Generate() {
   const [brand, setBrand] = useState<Brand>("jade");
   const [topic, setTopic] = useState(SUGGESTED_TOPICS.jade[0]);
@@ -28,12 +34,15 @@ export default function Generate() {
   const [platforms, setPlatforms] = useState<Platform[]>(["linkedin", "instagram"]);
   const [languages, setLanguages] = useState<Language[]>(["en"]);
   const [variants, setVariants] = useState(2);
-  const [includeVideo, setIncludeVideo] = useState(true);
+  const [mediaMode, setMediaMode] = useState<MediaMode>("image");
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const instagramSelected = platforms.includes("instagram");
+  const mediaWarning = mediaMode === "none" && instagramSelected;
 
   function toggle<T>(list: T[], value: T, setter: (v: T[]) => void) {
     setter(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -51,7 +60,7 @@ export default function Generate() {
         platforms,
         languages,
         variants,
-        include_video: includeVideo,
+        media_mode: mediaMode,
         auto_compliance: true,
       });
       setAssets(response.assets);
@@ -68,7 +77,7 @@ export default function Generate() {
       <header>
         <h1 className="text-2xl font-semibold text-white">Generate content</h1>
         <p className="mt-1 text-sm text-slate-400">
-          The Brain runs research → content → localisation → video → compliance, then
+          The Brain runs research → content → localisation → media → compliance, then
           writes everything into the pending-review queue.
         </p>
       </header>
@@ -173,21 +182,57 @@ export default function Generate() {
           </div>
         </div>
 
-        <label className="flex items-center gap-3 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={includeVideo}
-            onChange={(e) => setIncludeVideo(e.target.checked)}
-            className="h-4 w-4 accent-teal-400"
-          />
-          Generate short-form video scripts and render Reels (FFmpeg)
-        </label>
+        <div>
+          <label className="label">Media</label>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {MEDIA_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMediaMode(opt.value)}
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  mediaMode === opt.value
+                    ? "border-accent bg-accent/15"
+                    : "border-ink-600 hover:border-ink-500"
+                }`}
+              >
+                <span
+                  className={`block text-sm font-medium ${
+                    mediaMode === opt.value ? "text-accent-soft" : "text-slate-200"
+                  }`}
+                >
+                  {opt.label}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">{opt.hint}</span>
+              </button>
+            ))}
+          </div>
 
-        <button className="btn-primary" onClick={run} disabled={loading || platforms.length === 0}>
+          {mediaWarning && (
+            <p className="mt-2 text-xs text-amber-300">
+              Instagram requires an image or video. Choose “Image” or “Video / Reel” if
+              you plan to publish there.
+            </p>
+          )}
+          {mediaMode === "video" && (
+            <p className="mt-2 text-xs text-slate-500">
+              Video mode renders one 9:16 MP4 shared across every variant. Expect an
+              extra 15–25 seconds.
+            </p>
+          )}
+        </div>
+
+        <button
+          className="btn-primary"
+          onClick={run}
+          disabled={loading || platforms.length === 0}
+        >
           {loading ? "Running the pipeline…" : "Generate"}
         </button>
 
-        {loading && <Spinner label="Agents are researching, writing and checking compliance…" />}
+        {loading && (
+          <Spinner label="Agents are researching, writing and checking compliance…" />
+        )}
       </Card>
 
       {error && <ErrorBanner message={error} />}

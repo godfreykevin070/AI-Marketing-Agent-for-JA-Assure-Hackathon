@@ -88,52 +88,78 @@ def generate_script(brand: str, topic: str, brief: str | None, language: str) ->
         return VideoScript.model_validate(_fallback_script(brand, topic, language))
 
 
-def video_node(state: dict) -> dict:
-    """LangGraph node: attach video scripts and render Reels for reel-format drafts."""
+def media_node(state: dict) -> dict:
+    """LangGraph node: resolve media (image or video) for every draft.
+
+    - media_mode == "none"  → no media attached
+    - media_mode == "image" → fetch a stock image per draft
+    - media_mode == "video" → generate one script and render one reel,
+                              attach the same MP4 to every draft
+    """
     from app.config import get_settings
+    from app.services.media import fetch_stock_image
 
     settings = get_settings()
     drafts = state.get("drafts", [])
-    if not state.get("include_video", True):
-        return {"drafts": drafts}
+    media_mode = state.get("media_mode", "none")
+    errors = list(state.get("errors", []))
+
+    if not drafts or media_mode == "none":
+        return {"drafts": drafts, "errors": errors}
 
     brand = state["brand"]
     topic = state["topic"]
-    brief = state.get("brief")
-    errors = list(state.get("errors", []))
 
-    # One script shared across reel-format variants (they differ in copy, not video).
-    reel_indices = [i for i, d in enumerate(drafts) if d.get("format") == "reel"]
-    if not reel_indices:
+    # ---- Image mode --------------------------------------------------------
+    if media_mode == "image":
+        for i, draft in enumerate(drafts):
+            if draft.get("media_urls"):
+                continue
+            query = f"{brand.replace('_', ' ')} {topic}"
+            url = fetch_stock_image(query)
+            if url:
+                drafts[i]["media_urls"] = [url]
+            else:
+                errors.append(f"media[{i}]: no stock image found for '{query}'")
         return {"drafts": drafts, "errors": errors}
 
-    language = drafts[reel_indices[0]].get("language", "en")
-    try:
-        script = generate_script(brand, topic, brief, language)
-    except Exception as exc:
-        errors.append(f"video_script: {exc}")
-        return {"drafts": drafts, "errors": errors}
-
-    script_dict = script.model_dump(mode="json")
-
-    rendered_urls: list[str] = []
-    if settings.enable_video_render:
+    # ---- Video mode --------------------------------------------------------
+    if media_mode == "video":
+        # Generate the script once per run and attach to every draft.
+        language = drafts[0].get("language", "en")
         try:
-            audio_path = synthesize(script.hook + " " + " ".join(s.voiceover for s in script.scenes))
-            rendered_urls = assemble_reel(
-                scenes=[s.model_dump() for s in script.scenes],
-                title=script.title,
-                audio_path=audio_path,
-            )
+            script = generate_script(brand, topic, state.get("brief"), language)
         except Exception as exc:
-            logger.warning("reel render failed: %s", exc)
-            errors.append(f"video_render: {exc}")
+            errors.append(f"media: script generation failed: {exc}")
+            return {"drafts": drafts, "errors": errors}
 
-    for i in reel_indices:
-        drafts[i]["video_script"] = script_dict
-        if rendered_urls:
-            drafts[i]["media_urls"] = rendered_urls
-        if not drafts[i].get("hook"):
-            drafts[i]["hook"] = script.hook
+        script_dict = script.model_dump(mode="json")
+        rendered_urls: list[str] = []
+
+        if settings.enable_video_render:
+            try:
+                audio_path = synthesize(
+                    script.hook + " " + " ".join(s.voiceover for s in script.scenes)
+                )
+                rendered_urls = assemble_reel(
+                    scenes=[s.model_dump() for s in script.scenes],
+                    title=script.title,
+                    audio_path=audio_path,
+                    brand=brand,
+                )
+            except Exception as exc:
+                logger.warning("reel render failed: %s", exc)
+                errors.append(f"media: reel render failed: {exc}")
+
+        for i, draft in enumerate(drafts):
+            drafts[i]["video_script"] = script_dict
+            if rendered_urls:
+                drafts[i]["media_urls"] = rendered_urls
+            if not drafts[i].get("hook"):
+                drafts[i]["hook"] = script.hook
+            # Mark the format so the UI shows it as a reel/video
+            drafts[i]["format"] = "reel"
+
+        return {"drafts": drafts, "errors": errors}
 
     return {"drafts": drafts, "errors": errors}

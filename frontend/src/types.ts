@@ -207,3 +207,5 @@ export interface LoginResponse {
   expires_in: number;
   user: User;
 }
+
+export type MediaMode = "none" | "image" | "video";

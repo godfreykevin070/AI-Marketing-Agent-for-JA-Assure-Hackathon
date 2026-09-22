@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -12,7 +13,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-BUFFER_GRAPHQL = "https://api.bufferapp.com/1/graphql"
+BUFFER_GRAPHQL = "https://api.buffer.com"
 AYRSHARE_POST = "https://app.ayrshare.com/api/post"
 
 
@@ -20,6 +21,96 @@ class PublisherError(RuntimeError):
     pass
 
 
+def _media_type(url: str) -> str | None:
+    """Return 'image' or 'video' for a URL, ignoring query params."""
+    path = urlparse(str(url)).path.lower()
+    if path.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return "image"
+    if path.endswith((".mp4", ".mov", ".webm")):
+        return "video"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Image sourcing (used as last-resort fallback for platforms that require media)
+# ---------------------------------------------------------------------------
+def fetch_relevant_image(
+    brand: str,
+    title: str,
+    topic: str | None = None,
+) -> str | None:
+    """Find an existing stock image for the asset. Pexels first, Tavily fallback."""
+    query_parts = [brand.replace("_", " ")]
+    if topic:
+        query_parts.append(topic)
+    elif title:
+        query_parts.append(title)
+    query = " ".join(p for p in query_parts if p)[:120]
+
+    url = _pexels_image(query)
+    if url:
+        logger.info("using Pexels image: %s", url)
+        return url
+
+    url = _tavily_image(query)
+    if url:
+        logger.info("using Tavily image: %s", url)
+        return url
+
+    logger.warning("no image found for query: %s", query)
+    return None
+
+
+def _pexels_image(query: str) -> str | None:
+    settings = get_settings()
+    if not getattr(settings, "pexels_api_key", ""):
+        return None
+    try:
+        response = httpx.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": settings.pexels_api_key},
+            params={"query": query, "per_page": 5, "orientation": "square"},
+            timeout=20.0,
+        )
+        response.raise_for_status()
+        for p in response.json().get("photos", []):
+            src = p.get("src", {})
+            url = src.get("medium") or src.get("large") or src.get("original")
+            if url:
+                return url
+    except Exception as exc:
+        logger.warning("pexels search failed: %s", exc)
+    return None
+
+
+def _tavily_image(query: str) -> str | None:
+    from app.services.search import web_search
+    try:
+        results = web_search(query, max_results=5, include_images=True)
+    except Exception as exc:
+        logger.warning("tavily image search failed: %s", exc)
+        return None
+
+    for hit in results:
+        for img in hit.get("images") or []:
+            url = img if isinstance(img, str) else (img.get("url") if isinstance(img, dict) else None)
+            if url and url.startswith("http") and not _looks_hotlink_protected(url):
+                return url
+    return None
+
+
+def _looks_hotlink_protected(url: str) -> bool:
+    blocked = (
+        "blogspot.", "wordpress.com", "wixstatic.com/static",
+        "instagram.com", "facebook.com", "pinterest.",
+    )
+    lowered = url.lower()
+    return any(b in lowered for b in blocked)
+
+
+# ---------------------------------------------------------------------------
+# Base
+# ---------------------------------------------------------------------------
 class BasePublisher:
     name = "base"
 
@@ -30,6 +121,9 @@ class BasePublisher:
         return {}
 
 
+# ---------------------------------------------------------------------------
+# Dry run
+# ---------------------------------------------------------------------------
 class DryRunPublisher(BasePublisher):
     """Simulates a real post. Used for demos and CI."""
 
@@ -51,7 +145,6 @@ class DryRunPublisher(BasePublisher):
         }
 
     def fetch_analytics(self, external_post_id: str) -> dict[str, Any]:
-        # Deterministic pseudo-metrics so the analytics loop is demonstrable.
         seed = abs(hash(external_post_id)) % 1000
         return {
             "impressions": 400 + seed,
@@ -63,6 +156,9 @@ class DryRunPublisher(BasePublisher):
         }
 
 
+# ---------------------------------------------------------------------------
+# Buffer
+# ---------------------------------------------------------------------------
 class BufferPublisher(BasePublisher):
     """Buffer GraphQL createPost. Posts to your own connected accounts."""
 
@@ -90,19 +186,40 @@ class BufferPublisher(BasePublisher):
             raise PublisherError(f"No Buffer profile id configured for '{platform}'")
 
         text = self._compose_text(asset_row)
+
+        # Media is resolved during generation; build the assets array.
+        assets = []
+        for url in asset_row.get("media_urls") or []:
+            kind = _media_type(url)
+            if kind == "image":
+                assets.append({"image": {"url": url}})
+            elif kind == "video":
+                assets.append({"video": {"url": url}})
+
+        # Instagram requires an explicit post type. Determine it from the
+        # assets: a video asset means a Reel, otherwise a standard Post.
+        metadata = {}
+        if platform == "instagram":
+            has_video = any(
+                _media_type(url) == "video" for url in asset_row.get("media_urls") or []
+            )
+            metadata["instagram"] = {
+                "type": "reel" if has_video else "post",
+                "shouldShareToFeed": True,
+            }
+
         variables = {
             "input": {
                 "text": text,
                 "channelId": profile_id,
                 "schedulingType": "automatic",
                 "mode": "shareNow",
-                "assets": [
-                    {"type": "image", "url": url}
-                    for url in (asset_row.get("media_urls") or [])
-                    if str(url).lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
-                ],
+                "assets": assets,
             }
         }
+
+        if metadata:
+            variables["input"]["metadata"] = metadata
 
         response = httpx.post(
             BUFFER_GRAPHQL,
@@ -132,7 +249,6 @@ class BufferPublisher(BasePublisher):
         }
 
     def fetch_analytics(self, external_post_id: str) -> dict[str, Any]:
-        # Buffer exposes read endpoints; scaffolded for extension.
         return {"source": "buffer", "note": "analytics endpoint not polled in prototype"}
 
     @staticmethod
@@ -146,6 +262,9 @@ class BufferPublisher(BasePublisher):
         return "\n\n".join(p for p in parts if p).strip()
 
 
+# ---------------------------------------------------------------------------
+# Ayrshare
+# ---------------------------------------------------------------------------
 class AyrsharePublisher(BasePublisher):
     name = "ayrshare"
 
@@ -156,6 +275,18 @@ class AyrsharePublisher(BasePublisher):
         if not self.settings.ayrshare_api_key:
             raise PublisherError("AYRSHARE_API_KEY is not configured")
 
+        platform = asset_row.get("platform", "linkedin")
+        media_urls = list(asset_row.get("media_urls") or [])
+
+        if platform in ("instagram", "tiktok") and not media_urls:
+            found = fetch_relevant_image(
+                brand=str(asset_row.get("brand") or "ja_assure"),
+                title=str(asset_row.get("title") or ""),
+                topic=asset_row.get("source_topic"),
+            )
+            if found:
+                media_urls = [found]
+
         response = httpx.post(
             AYRSHARE_POST,
             headers={
@@ -164,16 +295,16 @@ class AyrsharePublisher(BasePublisher):
             },
             json={
                 "post": BufferPublisher._compose_text(asset_row),
-                "platforms": [asset_row.get("platform", "linkedin")],
-                "mediaUrls": asset_row.get("media_urls") or [],
+                "platforms": [platform],
+                "mediaUrls": media_urls,
             },
             timeout=30.0,
         )
         response.raise_for_status()
         data = response.json()
         return {
-            "external_post_id": data.get("id") or data.get("postIds", [None])[0],
-            "permalink": (data.get("postIds") or {}).get("status") if isinstance(data.get("postIds"), dict) else None,
+            "external_post_id": data.get("id") or (data.get("postIds") or [None])[0],
+            "permalink": None,
             "scheduled_for": datetime.now(timezone.utc).isoformat(),
             "status": "scheduled",
         }

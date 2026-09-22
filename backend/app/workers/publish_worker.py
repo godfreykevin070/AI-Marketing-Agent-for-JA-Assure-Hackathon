@@ -31,6 +31,7 @@ def _asset_to_row(asset: ContentAsset) -> dict:
         "cta": asset.cta,
         "hashtags": asset.hashtags or [],
         "media_urls": asset.media_urls or [],
+        "source_topic": asset.source_topic,
     }
 
 
@@ -58,6 +59,13 @@ def publish_approved(db: Session | None = None) -> dict:
             .all()
         )
 
+        if candidates:
+            logger.info(
+                "publish job: %d approved asset(s) to process via %s",
+                len(candidates),
+                publisher.name,
+            )
+
         for asset in candidates:
             row = _asset_to_row(asset)
             result = PostResult(
@@ -77,12 +85,26 @@ def publish_approved(db: Session | None = None) -> dict:
                 result.scheduled_for = datetime.now(timezone.utc)
                 asset.status = AssetStatus.scheduled.value
                 published.append(asset.id)
+                logger.info(
+                    "publish ok: %s → %s (%s)",
+                    asset.id,
+                    asset.platform,
+                    result.external_post_id or "no-id",
+                )
             except PublisherError as exc:
+                # Business-rule rejection from the publisher. This used to be
+                # silent — keep the log line.
                 result.status = PostStatus.failed.value
                 result.error = str(exc)
                 asset.status = AssetStatus.failed.value
                 failed.append({"asset_id": asset.id, "error": str(exc)})
-            except Exception as exc:  # pragma: no cover
+                logger.error(
+                    "publish rejected for %s (%s): %s",
+                    asset.id,
+                    asset.platform,
+                    exc,
+                )
+            except Exception as exc:
                 logger.exception("publish failed for %s", asset.id)
                 result.status = PostStatus.failed.value
                 result.error = str(exc)
@@ -121,7 +143,7 @@ def pull_analytics(db: Session | None = None) -> dict:
         for result in results:
             try:
                 analytics = publisher.fetch_analytics(result.external_post_id or "")
-            except Exception as exc:  # pragma: no cover
+            except Exception as exc:
                 logger.debug("analytics fetch failed: %s", exc)
                 continue
             if not analytics:

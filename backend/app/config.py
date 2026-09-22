@@ -26,17 +26,27 @@ class Settings(BaseSettings):
     # --- Database ---
     database_url: str = "sqlite:///./ja_assure.db"
 
+    # --- Auth ---
+    jwt_secret_key: str = "change-me-in-production-please-use-a-long-random-string"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480
+    default_admin_email: str = "admin@jaassure.com"
+    default_admin_password: str = "admin@123"
+    default_admin_name: str = "JA Assure Admin"
+
     # --- LLM ---
     groq_api_key: str = ""
+    groq_api_key_secondary: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.3-70b-versatile"
-    llm_fast_model: str = "llama-3.1-8b-instant"
+    llm_model: str = "openai/gpt-oss-120b"
+    llm_fast_model: str = "openai/gpt-oss-20b"
     llm_temperature: float = 0.6
-    llm_max_tokens: int = 4096
+    llm_max_tokens: int = 1500
 
-    # --- Research ---
+    # --- Research / media ---
     tavily_api_key: str = ""
     serper_api_key: str = ""
+    pexels_api_key: str = ""
 
     # --- Publishing (Project 2) ---
     publisher_backend: str = "dry_run"  # dry_run | buffer | ayrshare
@@ -55,19 +65,10 @@ class Settings(BaseSettings):
     analytics_poll_seconds: int = 600
     max_compliance_retries: int = 2
 
-    # --- Auth ---
-    jwt_secret_key: str = "change-me-in-production-please-use-a-long-random-string"
-    jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 480          # 8 hours
-    default_admin_email: str = "admin@jaassure.com"
-    default_admin_password: str = "admin@123"
-    default_admin_name: str = "JA Assure Admin"
-
     # ------------------------------------------------------------------
     @field_validator("database_url")
     @classmethod
     def _normalise_db_url(cls, v: str) -> str:
-        # Heroku/Render style URLs
         if v.startswith("postgres://"):
             v = v.replace("postgres://", "postgresql://", 1)
         return v

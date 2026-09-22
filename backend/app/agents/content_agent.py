@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import time
 
 from app.agents.prompts import (
     brand_block,
@@ -170,6 +171,7 @@ def content_node(state: dict) -> dict:
                 continue
             for d in generated:
                 drafts.append(d.model_dump(mode="json"))
+            time.sleep(8.0)
 
     return {"drafts": drafts, "errors": errors, "attempts": state.get("attempts", 0)}
 
@@ -216,6 +218,7 @@ def revise_node(state: dict) -> dict:
             "Return exactly one asset in the `assets` array, same platform, format, "
             "language and variant label. Respond as JSON."
         )
+        
         try:
             batch: _ContentBatch = _chat_json(
                 SYSTEM_PROMPT, prompt, _ContentBatch, temperature=0.5
@@ -226,6 +229,12 @@ def revise_node(state: dict) -> dict:
                 fixed["format"] = draft["format"]
                 fixed["language"] = draft["language"]
                 fixed["variant_label"] = draft.get("variant_label")
+                # Preserve media and structural fields — the LLM only
+                # returns copy, so anything we attached earlier must be
+                # carried across the revision.
+                fixed["media_urls"] = draft.get("media_urls", [])
+                fixed["video_script"] = draft.get("video_script")
+                fixed["visual_prompt"] = draft.get("visual_prompt", "")
                 revised[idx] = fixed
         except Exception as exc:
             logger.warning("revision failed for asset %s: %s", idx, exc)

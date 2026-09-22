@@ -20,7 +20,7 @@ from app.agents.lead_agent import (
 from app.agents.localization_agent import localization_node
 from app.agents.research_agent import research_node
 from app.agents.state import ContentState, LeadState
-from app.agents.video_agent import video_node
+from app.agents.video_agent import media_node
 from app.config import get_settings
 from app.enums import AssetStatus, ComplianceStatus
 from app.models import AgentRun, ContentAsset
@@ -88,26 +88,26 @@ def persist_node(state: ContentState) -> dict:
 
 def build_content_graph():
     graph = StateGraph(ContentState)
-    graph.add_node("research", research_node)
-    graph.add_node("content", content_node)
-    graph.add_node("localize", localization_node)
-    graph.add_node("video", video_node)
-    graph.add_node("compliance", compliance_node)
-    graph.add_node("revise", revise_node)
-    graph.add_node("persist", persist_node)
+    graph.add_node("do_research", research_node)
+    graph.add_node("draft_content", content_node)
+    graph.add_node("localize_content", localization_node)
+    graph.add_node("resolve_media", media_node)      # ← renamed
+    graph.add_node("check_compliance", compliance_node)
+    graph.add_node("revise_content", revise_node)
+    graph.add_node("persist_assets", persist_node)
 
-    graph.set_entry_point("research")
-    graph.add_edge("research", "content")
-    graph.add_edge("content", "localize")
-    graph.add_edge("localize", "video")
-    graph.add_edge("video", "compliance")
+    graph.set_entry_point("do_research")
+    graph.add_edge("do_research", "draft_content")
+    graph.add_edge("draft_content", "localize_content")
+    graph.add_edge("localize_content", "resolve_media")     # ← renamed
+    graph.add_edge("resolve_media", "check_compliance")     # ← renamed
     graph.add_conditional_edges(
-        "compliance",
+        "check_compliance",
         _route_after_compliance,
-        {"revise": "revise", "persist": "persist"},
+        {"revise": "revise_content", "persist": "persist_assets"},
     )
-    graph.add_edge("revise", "compliance")
-    graph.add_edge("persist", END)
+    graph.add_edge("revise_content", "check_compliance")
+    graph.add_edge("persist_assets", END)
     return graph.compile()
 
 
@@ -143,7 +143,7 @@ def run_content_pipeline(db: Session, request: GenerateRequest) -> dict[str, Any
         "platforms": [p.value for p in request.platforms],
         "languages": [l.value for l in request.languages],
         "variants": request.variants,
-        "include_video": request.include_video,
+        "media_mode": request.media_mode,      # ← was include_video
         "auto_compliance": request.auto_compliance,
         "attempts": 0,
         "errors": [],

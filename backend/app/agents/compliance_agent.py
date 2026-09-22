@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Any
 
 from app.agents.prompts import (
@@ -119,6 +120,7 @@ def evaluate_assets(brand: str, assets: list[dict[str, Any]]) -> dict[int, dict[
         chunk = assets[start : start + batch_size]
         for idx, verdict in _llm_verdicts(chunk, brand).items():
             llm_results[start + idx] = verdict
+        time.sleep(8.0)
 
     for i, asset in enumerate(assets):
         det = deterministic_screen(asset)
